@@ -163,12 +163,22 @@ def main():
     categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
     print(f"Found {len(categorical_cols)} categorical columns: {categorical_cols}")
 
+    # Calculate categorical defaults (mode/most frequent) before encoding
+    categorical_defaults = {}
+    for col in categorical_cols:
+        # Handle NaN values first
+        df[col] = df[col].astype(str).fillna("nan_missing")
+        # Get the most frequent value (mode)
+        mode_value = df[col].mode()
+        if len(mode_value) > 0:
+            categorical_defaults[col] = mode_value[0]
+        else:
+            categorical_defaults[col] = "nan_missing"  # fallback if no mode found
+
     # Fit LabelEncoders and transform
     encoders = {}
     for col in categorical_cols:
         le = LabelEncoder()
-        # convert to str to avoid issues with NaN
-        df[col] = df[col].astype(str).fillna("nan_missing")
         le.fit(df[col])
         df[col] = le.transform(df[col])
         encoders[col] = le
@@ -232,10 +242,12 @@ def main():
     # features.pkl must be the exact numeric column order used by scaler
     with open(os.path.join(ARTIFACT_DIR, "features.pkl"), "wb") as f:
         pickle.dump(numeric_cols, f)
-    # medians/defaults
-    med_dict = {str(k): float(v) for k, v in medians.items()}
+    # medians/defaults - now includes both numeric and categorical defaults
+    defaults_dict = {str(k): float(v) for k, v in medians.items()}
+    # Add categorical defaults
+    defaults_dict.update({f"{k}_categorical": v for k, v in categorical_defaults.items()})
     with open(os.path.join(ARTIFACT_DIR, "defaults.pkl"), "wb") as f:
-        pickle.dump(med_dict, f)
+        pickle.dump(defaults_dict, f)
     # encoders
     with open(os.path.join(ARTIFACT_DIR, "encoders.pkl"), "wb") as f:
         pickle.dump(encoders, f)

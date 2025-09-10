@@ -12,14 +12,47 @@ import pickle
 import os
 from datetime import date
 
-st.set_page_config(page_title="Loan - New Customer Prediction", layout="centered")
-st.title("🏦 Loan Repayment Risk Prediction")
+# Load custom CSS
+def load_css():
+    try:
+        with open("style.css", "r") as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.warning("style.css not found. Using default styling.")
 
-mode = st.radio(
-    "Select input mode:",
-    options=["Human-friendly input", "Paste a CSV row"],
-    index=0
+st.set_page_config(
+    page_title="Loan Risk Predictor",
+    page_icon="🏦",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+# Apply custom CSS
+load_css()
+
+# Enhanced title with custom styling
+st.markdown("""
+<div class="header">
+    <h1>🏦 Loan Repayment Risk Prediction</h1>
+    <p>Advanced ML-powered loan approval system</p>
+</div>
+""", unsafe_allow_html=True)
+
+# Enhanced mode selection - inline layout
+col1, col2 = st.columns([1, 3])
+with col1:
+    st.markdown("### 🎯 Select Input Mode")
+with col2:
+    st.markdown('<div style="margin-top: -10px;">', unsafe_allow_html=True)
+    mode = st.radio(
+        "",
+        options=["Human-friendly input", "Paste a CSV row"],
+        index=0,
+        horizontal=True,
+        help="Select your preferred input method for customer data entry"
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
+
 st.markdown("---")
 
 ARTIFACT_FILES = {
@@ -163,15 +196,34 @@ def build_ui_inputs(features, defaults, encoders, metadata):
     # Geographical Info
     # -----------------------------
     geo_cols = ["RESIDENCE", "BIRTHPLACE", "NATIONALITY", "EG_FGN_RESIDENT", "ID_TYPE"]
-    with st.expander("🌍 Geographical Info", expanded=True):
+    with st.expander("🌍 Geographical Information", expanded=True):
         for col in geo_cols:
             if col in categorical_cols:
                 le = encoders.get(col)
                 if le:
-                    sel = st.selectbox(col, list(le.classes_), index=0, key=f"cat_{col}")
+                    # Get the categorical default (mode) for this column
+                    categorical_default = defaults.get(f"{col}_categorical", le.classes_[0])
+                    # Find the index of the default value in the classes
+                    try:
+                        default_index = list(le.classes_).index(categorical_default)
+                    except ValueError:
+                        default_index = 0  # fallback if not found
+
+                    sel = st.selectbox(
+                        f"📍 {col.replace('_', ' ').title()}",
+                        list(le.classes_),
+                        index=default_index,
+                        key=f"cat_{col}",
+                        help=f"Select the {col.lower().replace('_', ' ')}"
+                    )
                     cat_inputs[col] = str(sel)
             elif col in features:
-                val = st.number_input(col, value=float(defaults.get(col, 0.0)), key=f"num_{col}")
+                val = st.number_input(
+                    f"📊 {col.replace('_', ' ').title()}",
+                    value=float(defaults.get(col, 0.0)),
+                    key=f"num_{col}",
+                    help=f"Enter the {col.lower().replace('_', ' ')}"
+                )
                 numeric_inputs[col] = val
 
     # -----------------------------
@@ -179,34 +231,68 @@ def build_ui_inputs(features, defaults, encoders, metadata):
     # -----------------------------
     personal_cols = ["CUSTOMER_SEGMENT", "INDUSTRY", "JOB_TITLE", "INCOME_SOURCE",
                      "SEX", "TITLE", "AGE", "MARITAL_STATUS", "TOTAL_MONTHLY_INCOME"]
-    with st.expander("👤 Personal / Demographics", expanded=True):
-        for col in personal_cols:
-            if col in categorical_cols:
-                le = encoders.get(col)
-                if le:
-                    sel = st.selectbox(col, list(le.classes_), index=0, key=f"cat_{col}")
-                    cat_inputs[col] = str(sel)
-            elif col == "AGE":
-                # replace AGE input with birthdate picker
-                bdate = st.date_input(
-                    "Birthdate",
-                    value=pd.to_datetime("1980-01-01"),
-                    min_value=pd.to_datetime("1925-01-01"),
-                    max_value=pd.to_datetime("2025-12-31"),
-                    key="birthdate"
-                )
-                today = pd.Timestamp.today()
-                age = today.year - bdate.year - ((today.month, today.day) < (bdate.month, bdate.day))
-                numeric_inputs[col] = age
-            elif col in features:
-                val = st.number_input(
-                    col,
-                    value=float(defaults.get(col, 0.0)),
-                    step=0.01,
-                    format="%.2f",
-                    key=f"num_{col}"
-                )
-                numeric_inputs[col] = val
+    with st.expander("👤 Personal & Demographics", expanded=True):
+        col1, col2 = st.columns(2)
+
+        for i, col in enumerate(personal_cols):
+            container = col1 if i % 2 == 0 else col2
+
+            with container:
+                if col in categorical_cols:
+                    le = encoders.get(col)
+                    if le:
+                        # Get the categorical default (mode) for this column
+                        categorical_default = defaults.get(f"{col}_categorical", le.classes_[0])
+                        # Find the index of the default value in the classes
+                        try:
+                            default_index = list(le.classes_).index(categorical_default)
+                        except ValueError:
+                            default_index = 0  # fallback if not found
+
+                        sel = st.selectbox(
+                            f"👥 {col.replace('_', ' ').title()}",
+                            list(le.classes_),
+                            index=default_index,
+                            key=f"cat_{col}",
+                            help=f"Select the {col.lower().replace('_', ' ')}"
+                        )
+                        cat_inputs[col] = str(sel)
+                elif col == "AGE":
+                    # replace AGE input with birthdate picker
+                    bdate = st.date_input(
+                        "🎂 Birthdate",
+                        value=pd.to_datetime("1980-01-01").date(),
+                        min_value=pd.to_datetime("1925-01-01").date(),
+                        max_value=pd.to_datetime("2025-12-31").date(),
+                        key="birthdate",
+                        help="Select the customer's birth date"
+                    )
+                    today = pd.Timestamp.today()
+                    bdate_ts = pd.Timestamp(bdate)
+
+                    # Calculate age with decimal precision
+                    age_years = today.year - bdate_ts.year
+                    age_days = (today - bdate_ts.replace(year=today.year)).days
+                    if age_days < 0:  # Birthday hasn't occurred this year
+                        age_years -= 1
+                        age_days = (today - bdate_ts.replace(year=today.year - 1)).days
+
+                    age_decimal = age_years + (age_days / 365.25)
+                    age_formatted = round(age_decimal, 2)
+
+                    numeric_inputs[col] = age_formatted
+                    st.info(f"Calculated age: **{age_formatted:.2f} years**")
+                elif col in features:
+                    val = st.number_input(
+                        f"💰 {col.replace('_', ' ').title()}",
+                        value=float(defaults.get(col, 0.0)),
+                        step=0.01,
+                        format="%.2f",
+                        key=f"num_{col}",
+                        help=f"Enter the {col.lower().replace('_', ' ')}"
+                    )
+                    numeric_inputs[col] = val
+
     # -----------------------------
     # Account / Contact Info
     # -----------------------------
@@ -226,7 +312,15 @@ def build_ui_inputs(features, defaults, encoders, metadata):
             elif col in categorical_cols:
                 le = encoders.get(col)
                 if le:
-                    sel = st.selectbox(col, list(le.classes_), index=0, key=f"cat_{col}")
+                    # Get the categorical default (mode) for this column
+                    categorical_default = defaults.get(f"{col}_categorical", le.classes_[0])
+                    # Find the index of the default value in the classes
+                    try:
+                        default_index = list(le.classes_).index(categorical_default)
+                    except ValueError:
+                        default_index = 0  # fallback if not found
+
+                    sel = st.selectbox(col, list(le.classes_), index=default_index, key=f"cat_{col}")
                     cat_inputs[col] = str(sel)
             elif col in features:
                 val = st.number_input(col, value=float(defaults.get(col, 0.0)), key=f"num_{col}")
@@ -252,35 +346,49 @@ def build_ui_inputs(features, defaults, encoders, metadata):
             elif col in categorical_cols:
                 le = encoders.get(col)
                 if le:
-                    sel = st.selectbox(col, list(le.classes_), index=0, key=f"cat_{col}")
+                    # Get the categorical default (mode) for this column
+                    categorical_default = defaults.get(f"{col}_categorical", le.classes_[0])
+                    # Find the index of the default value in the classes
+                    try:
+                        default_index = list(le.classes_).index(categorical_default)
+                    except ValueError:
+                        default_index = 0  # fallback if not found
+
+                    sel = st.selectbox(col, list(le.classes_), index=default_index, key=f"cat_{col}")
                     cat_inputs[col] = str(sel)
             elif col in features:
                 val = st.number_input(col, value=float(defaults.get(col, 0.0)), key=f"num_{col}")
                 numeric_inputs[col] = val
 
     # -----------------------------
-    # Loan Details
+    # Loan Details (Enhanced)
     # -----------------------------
     loan_cols = ["LOAN_START_DATE", "LOAN_END_DATE", "INTEREST_BASIS", "INTEREST_RATE",
                  "LOAN_MONTHS", "LOAN_AMOUNT", "CONTRACT_TYPE", "ISL&SME_REPAY_TYPE",
                  "LOAN_TYPE", "LOAN_SUB_TYPE"]
 
     with st.expander("💰 Loan Details", expanded=True):
-        # Loan start & end dates
-        loan_start = st.date_input(
-            "Loan Start Date",
-            value=pd.to_datetime("2020-01-01"),
-            min_value=pd.to_datetime("1900-01-01"),
-            max_value=pd.to_datetime("2100-12-31"),
-            key="loan_start"
-        )
-        loan_end = st.date_input(
-            "Loan End Date",
-            value=pd.to_datetime("2025-01-01"),
-            min_value=pd.to_datetime("1900-01-01"),
-            max_value=pd.to_datetime("2100-12-31"),
-            key="loan_end"
-        )
+        # Date inputs in columns
+        col1, col2 = st.columns(2)
+        with col1:
+            loan_start = st.date_input(
+                "📅 Loan Start Date",
+                value=pd.to_datetime("2020-01-01"),
+                min_value=pd.to_datetime("1900-01-01"),
+                max_value=pd.to_datetime("2100-12-31"),
+                key="loan_start",
+                help="Select when the loan starts"
+            )
+        with col2:
+            loan_end = st.date_input(
+                "📅 Loan End Date",
+                value=pd.to_datetime("2025-01-01"),
+                min_value=pd.to_datetime("1900-01-01"),
+                max_value=pd.to_datetime("2100-12-31"),
+                key="loan_end",
+                help="Select when the loan ends"
+            )
+
         date_inputs["LOAN_START_DATE"] = pd.to_datetime(loan_start)
         date_inputs["LOAN_END_DATE"] = pd.to_datetime(loan_end)
 
@@ -291,24 +399,44 @@ def build_ui_inputs(features, defaults, encoders, metadata):
 
         numeric_inputs["LOAN_MONTHS"] = max(duration_months, 0)  # no negative durations
 
-        st.write(f"📅 Loan Duration (calculated): **{duration_months} months**")
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                    color: white; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
+            <h4 style="margin: 0; color: white;">📅 Loan Duration: {duration_months} months</h4>
+        </div>
+        """, unsafe_allow_html=True)
 
-        # other loan fields
+        # Other loan fields in organized layout
         for col in loan_cols:
             if col in ["LOAN_START_DATE", "LOAN_END_DATE", "LOAN_MONTHS"]:
                 continue  # skip, since we handle them above
             if col in categorical_cols:
                 le = encoders.get(col)
                 if le:
-                    sel = st.selectbox(col, list(le.classes_), index=0, key=f"cat_{col}")
+                    # Get the categorical default (mode) for this column
+                    categorical_default = defaults.get(f"{col}_categorical", le.classes_[0])
+                    # Find the index of the default value in the classes
+                    try:
+                        default_index = list(le.classes_).index(categorical_default)
+                    except ValueError:
+                        default_index = 0  # fallback if not found
+
+                    sel = st.selectbox(
+                        f"📋 {col.replace('_', ' ').title()}",
+                        list(le.classes_),
+                        index=default_index,
+                        key=f"cat_{col}",
+                        help=f"Select the {col.lower().replace('_', ' ')}"
+                    )
                     cat_inputs[col] = str(sel)
             elif col in features:
                 val = st.number_input(
-                    col,
+                    f"💵 {col.replace('_', ' ').title()}",
                     value=float(defaults.get(col, 0.0)),
                     step=0.01,
                     format="%.2f",
-                    key=f"num_{col}"
+                    key=f"num_{col}",
+                    help=f"Enter the {col.lower().replace('_', ' ')}"
                 )
                 numeric_inputs[col] = val
 
@@ -326,33 +454,50 @@ def build_ui_inputs(features, defaults, encoders, metadata):
             for key, value in derived_features.items():
                 numeric_inputs[key] = value
 
-            # Display calculated values in an organized way
-            st.markdown("**📊 Calculated Loan Values:**")
+            # Enhanced display of calculated values
+            st.markdown("### 📊 Calculated Loan Metrics")
+
+            # Create metrics in a grid layout
             col1, col2, col3 = st.columns(3)
 
             with col1:
-                st.write(f"**Total Interest:** {derived_features['TOT_INTEREST_AMT']:,.2f}")
-                st.write(f"**Total Loan:** {derived_features['TOTAL_LOAN_AMOUNT']:,.2f}")
-                st.write(f"**Monthly Payment:** {derived_features['MONTHLY_PAYMENT']:,.2f}")
-                st.write(f"**DTI Ratio:** {derived_features['DTI']:.2f}")
-                st.write(f"**Monthly Burden:** {derived_features['MONTHLY_PAYMENT_BURDEN']:.2f}")
+                st.markdown("""
+                <div class="metric-card">
+                    <h4>💰 Financial Overview</h4>
+                </div>
+                """, unsafe_allow_html=True)
+                st.metric("Total Interest", f"${derived_features['TOT_INTEREST_AMT']:,.2f}")
+                st.metric("Total Loan", f"${derived_features['TOTAL_LOAN_AMOUNT']:,.2f}")
+                st.metric("Monthly Payment", f"${derived_features['MONTHLY_PAYMENT']:,.2f}")
+                st.metric("DTI Ratio", f"{derived_features['DTI']:.2f}")
+                st.metric("Monthly Burden", f"{derived_features['MONTHLY_PAYMENT_BURDEN']:.2f}")
 
             with col2:
-                st.write(f"**Annual Burden:** {derived_features['ANNUALIZED_PAYMENT_BURDEN']:.2f}")
-                st.write(f"**Cumulative Interest %:** {derived_features['CUMULATIVE_INTEREST_PCT']:.2f}")
-                st.write(f"**Effective Rate:** {derived_features['EFFECTIVE_INTEREST_RATE']:.2f}")
-                st.write(f"**Interest/Income:** {derived_features['INTEREST_TO_INCOME_RATIO']:.2f}")
-                st.write(f"**Interest Coverage:** {derived_features['INTEREST_COVERAGE']:.2f}")
+                st.markdown("""
+                <div class="metric-card">
+                    <h4>📈 Risk Metrics</h4>
+                </div>
+                """, unsafe_allow_html=True)
+                st.metric("Annual Burden", f"{derived_features['ANNUALIZED_PAYMENT_BURDEN']:.2f}")
+                st.metric("Interest %", f"{derived_features['CUMULATIVE_INTEREST_PCT']:.2f}")
+                st.metric("Effective Rate", f"{derived_features['EFFECTIVE_INTEREST_RATE']:.2f}")
+                st.metric("Interest/Income", f"{derived_features['INTEREST_TO_INCOME_RATIO']:.2f}")
+                st.metric("Interest Coverage", f"{derived_features['INTEREST_COVERAGE']:.2f}")
 
             with col3:
-                st.write(f"**Payment/Loan:** {derived_features['PAYMENT_TO_LOAN_RATIO']:.2f}")
-                st.write(f"**Principal Share/Month:** {derived_features['PRINCIPAL_SHARE_PER_MONTH']:.2f}")
-                st.write(f"**Loan/Income Exposure:** {derived_features['LOAN_TO_INCOME_EXPOSURE']:.2f}")
-                st.write(f"**Total Cost/Income:** {derived_features['TOTAL_COST_TO_INCOME_EXPOSURE']:.2f}")
-                st.write(f"**Principal/Interest:** {derived_features['PRINCIPAL_TO_INTEREST_RATIO']:.2f}")
+                st.markdown("""
+                <div class="metric-card">
+                    <h4>⚖️ Exposure Ratios</h4>
+                </div>
+                """, unsafe_allow_html=True)
+                st.metric("Payment/Loan", f"{derived_features['PAYMENT_TO_LOAN_RATIO']:.2f}")
+                st.metric("Principal/Month", f"{derived_features['PRINCIPAL_SHARE_PER_MONTH']:.2f}")
+                st.metric("Loan Exposure", f"{derived_features['LOAN_TO_INCOME_EXPOSURE']:.2f}")
+                st.metric("Total Exposure", f"{derived_features['TOTAL_COST_TO_INCOME_EXPOSURE']:.2f}")
+                st.metric("Principal/Interest", f"{derived_features['PRINCIPAL_TO_INTEREST_RATIO']:.2f}")
 
         else:
-            st.warning("Loan duration and amount must be greater than 0 to calculate derived values.")
+            st.warning("⚠️ Loan duration and amount must be greater than 0 to calculate derived values.")
             # Set all derived features to 0 to avoid errors
             derived_features_list = ["TOT_INTEREST_AMT", "TOTAL_LOAN_AMOUNT", "MONTHLY_PAYMENT", "DTI",
                                      "MONTHLY_PAYMENT_BURDEN", "ANNUALIZED_PAYMENT_BURDEN", "CUMULATIVE_INTEREST_PCT",
@@ -362,6 +507,7 @@ def build_ui_inputs(features, defaults, encoders, metadata):
                                      "PRINCIPAL_TO_INTEREST_RATIO"]
             for feat in derived_features_list:
                 numeric_inputs[feat] = 0.0
+
 
     # -----------------------------
     # Charges / Posting
@@ -375,7 +521,15 @@ def build_ui_inputs(features, defaults, encoders, metadata):
             elif col in categorical_cols:
                 le = encoders.get(col)
                 if le:
-                    sel = st.selectbox(col, list(le.classes_), index=0, key=f"cat_{col}")
+                    # Get the categorical default (mode) for this column
+                    categorical_default = defaults.get(f"{col}_categorical", le.classes_[0])
+                    # Find the index of the default value in the classes
+                    try:
+                        default_index = list(le.classes_).index(categorical_default)
+                    except ValueError:
+                        default_index = 0  # fallback if not found
+
+                    sel = st.selectbox(col, list(le.classes_), index=default_index, key=f"cat_{col}")
                     cat_inputs[col] = str(sel)
             elif col in features:
                 val = st.number_input(col, value=float(defaults.get(col, 0.0)), key=f"num_{col}")
@@ -534,23 +688,35 @@ def preprocess_paste_input(raw_text, features, encoders, metadata, defaults):
 
 
 def main():
-    st.markdown(
-        """
-        Enter human-friendly values (select residence like 'Giza', pick dates, fill numeric fields).
-        The app will encode and transform the inputs exactly like the training pipeline then predict.
-        """
-    )
+    st.markdown("""
+    <div class="form-container">
+        <p style="font-size: 1.1rem; color: #64748b; text-align: center;">
+            🎯 Enter customer information using human-friendly inputs. Our advanced ML model will
+            process and predict loan approval risk with high accuracy.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
     # Load artifacts
     try:
         model, scaler, pca, features, defaults, encoders, metadata = load_artifacts()
     except Exception as e:
-        st.error("Could not load artifacts. Make sure you've run the training script to create them.")
+        st.error("❌ Could not load artifacts. Make sure you've run the training script to create them.")
         st.info(str(e))
         st.stop()
 
-    st.success("✅ Artifacts loaded.")
-    st.write(f"Model: `{ARTIFACT_FILES['model']}`  •  Features count: **{len(features)}**")
+    # Enhanced success message
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                color: white; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
+        <h4 style="margin: 0; color: white;">✅ Artifacts loaded successfully!</h4>
+        <p style="margin: 0.5rem 0 0 0; color: white;">
+            Model: <code style="background: rgba(255,255,255,0.2); padding: 0.2rem 0.5rem; border-radius: 4px;">{ARTIFACT_FILES['model']}</code> •
+            Features: <strong>{len(features)}</strong>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
     if mode == "Human-friendly input":
         # -----------------------------
         # Human-friendly inputs
@@ -558,70 +724,148 @@ def main():
         cat_inputs, date_inputs, numeric_inputs = build_ui_inputs(features, defaults, encoders, metadata)
 
         st.markdown("---")
-        if st.checkbox("Preview assembled feature vector", value=False):
+
+        # Enhanced preview section
+        if st.checkbox("🔍 Preview assembled feature vector", value=False):
             try:
-                X_preview = assemble_feature_vector(features, cat_inputs, date_inputs, numeric_inputs, encoders,
-                                                    metadata)
-                st.dataframe(X_preview.T.rename(columns={0: "value"}))
+                X_preview = assemble_feature_vector(features, cat_inputs, date_inputs, numeric_inputs, encoders, metadata)
+                st.markdown("### 📋 Feature Vector Preview")
+                st.dataframe(X_preview.T.rename(columns={0: "value"}), use_container_width=True)
             except Exception as e:
-                st.error("Could not assemble preview: " + str(e))
+                st.error("❌ Could not assemble preview: " + str(e))
 
-        if st.button("Predict"):
+        # Enhanced predict button
+        if st.button("🚀 Predict Loan Risk", type="primary", use_container_width=True):
             try:
-                X_new = assemble_feature_vector(features, cat_inputs, date_inputs, numeric_inputs, encoders, metadata)
-                # Apply scaler and pca then predict
-                X_scaled = scaler.transform(X_new)
-                X_pca = pca.transform(X_scaled)
-                proba = model.predict_proba(X_pca)[0][1] if hasattr(model, "predict_proba") else None
-                pred = int(model.predict(X_pca)[0])
-                if pred == 1:
-                    st.success(
-                        f"✅ CUR (Approved) — probability (CUR) = {proba:.4f}" if proba is not None else "✅ CUR (Approved)")
-                else:
-                    st.error(
-                        f"❌ PDO (Rejected) — probability (CUR) = {proba:.4f}" if proba is not None else "❌ PDO (Rejected)")
-                with st.expander("Show transformed vector and shapes"):
-                    st.write("Scaled shape:", X_scaled.shape)
-                    st.write("PCA shape:", X_pca.shape)
-                    st.write("PCA vector (first 10):", X_pca[0][:10].tolist())
-            except Exception as e:
-                st.exception("Error during prediction: " + str(e))
-
-
-    elif mode == "Paste a CSV row":
-        # -----------------------------
-        # Paste row input
-        # -----------------------------
-        st.subheader("📝 Quick paste a row")
-        paste_input = st.text_area(
-            "Paste a CSV row here (header optional). The app will preprocess and predict.",
-            height=150,
-            placeholder="RESIDENCE,BIRTHPLACE,..."
-        )
-        paste_button = st.button("Predict from pasted row")
-
-        if paste_button:
-            if not paste_input.strip():
-                st.warning("Please paste a row first.")
-            else:
-                try:
-                    X_new = preprocess_paste_input(paste_input, features, encoders, metadata, defaults)
+                with st.spinner("🔄 Processing prediction..."):
+                    X_new = assemble_feature_vector(features, cat_inputs, date_inputs, numeric_inputs, encoders, metadata)
+                    # Apply scaler and pca then predict
                     X_scaled = scaler.transform(X_new)
                     X_pca = pca.transform(X_scaled)
                     proba = model.predict_proba(X_pca)[0][1] if hasattr(model, "predict_proba") else None
                     pred = int(model.predict(X_pca)[0])
+
+                if pred == 1:
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                                color: white; padding: 2rem; border-radius: 12px; text-align: center; margin: 2rem 0;">
+                        <h2 style="margin: 0; color: white;">✅ LOAN APPROVED</h2>
+                        <p style="margin: 1rem 0 0 0; font-size: 1.2rem; color: white;">
+                            Probability Score: <strong>{proba:.4f}</strong>
+                        </p>
+                    </div>
+                    """ if proba is not None else """
+                    <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                                color: white; padding: 2rem; border-radius: 12px; text-align: center; margin: 2rem 0;">
+                        <h2 style="margin: 0; color: white;">✅ LOAN APPROVED</h2>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+                                color: white; padding: 2rem; border-radius: 12px; text-align: center; margin: 2rem 0;">
+                        <h2 style="margin: 0; color: white;">❌ LOAN REJECTED</h2>
+                        <p style="margin: 1rem 0 0 0; font-size: 1.2rem; color: white;">
+                            Probability Score: <strong>{proba:.4f}</strong>
+                        </p>
+                    </div>
+                    """ if proba is not None else """
+                    <div style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+                                color: white; padding: 2rem; border-radius: 12px; text-align: center; margin: 2rem 0;">
+                        <h2 style="margin: 0; color: white;">❌ LOAN REJECTED</h2>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                with st.expander("🔍 Show technical details"):
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Scaled Shape", f"{X_scaled.shape[0]}×{X_scaled.shape[1]}")
+                    with col2:
+                        st.metric("PCA Shape", f"{X_pca.shape[0]}×{X_pca.shape[1]}")
+                    with col3:
+                        st.metric("Features Used", len(features))
+
+                    st.write("**PCA Vector (first 10 components):**")
+                    st.code(X_pca[0][:10].tolist())
+            except Exception as e:
+                st.exception("❌ Error during prediction: " + str(e))
+
+
+    elif mode == "Paste a CSV row":
+        # Enhanced paste input section
+        st.markdown("### 📝 Quick CSV Input")
+        st.markdown("""
+        <div class="form-container">
+            <p>Paste a CSV row below. The system will automatically preprocess and predict.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        paste_input = st.text_area(
+            "📋 CSV Data",
+            height=150,
+            placeholder="RESIDENCE,BIRTHPLACE,NATIONALITY,...",
+            help="Paste your CSV row here (header optional)"
+        )
+
+        paste_button = st.button("🚀 Predict from CSV", type="primary", use_container_width=True)
+
+        if paste_button:
+            if not paste_input.strip():
+                st.warning("⚠️ Please paste a CSV row first.")
+            else:
+                try:
+                    with st.spinner("🔄 Processing CSV data..."):
+                        X_new = preprocess_paste_input(paste_input, features, encoders, metadata, defaults)
+                        X_scaled = scaler.transform(X_new)
+                        X_pca = pca.transform(X_scaled)
+                        proba = model.predict_proba(X_pca)[0][1] if hasattr(model, "predict_proba") else None
+                        pred = int(model.predict(X_pca)[0])
+
+                    # Same enhanced result display as above
                     if pred == 1:
-                        st.success(
-                            f"✅ CUR (Approved) — probability (CUR) = {proba:.4f}" if proba is not None else "✅ CUR (Approved)")
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                                    color: white; padding: 2rem; border-radius: 12px; text-align: center; margin: 2rem 0;">
+                            <h2 style="margin: 0; color: white;">✅ LOAN APPROVED</h2>
+                            <p style="margin: 1rem 0 0 0; font-size: 1.2rem; color: white;">
+                                Probability Score: <strong>{proba:.4f}</strong>
+                            </p>
+                        </div>
+                        """ if proba is not None else """
+                        <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                                    color: white; padding: 2rem; border-radius: 12px; text-align: center; margin: 2rem 0;">
+                            <h2 style="margin: 0; color: white;">✅ LOAN APPROVED</h2>
+                        </div>
+                        """, unsafe_allow_html=True)
                     else:
-                        st.error(
-                            f"❌ PDO (Rejected) — probability (CUR) = {proba:.4f}" if proba is not None else "❌ PDO (Rejected)")
-                    with st.expander("Show transformed vector and shapes"):
-                        st.write("Scaled shape:", X_scaled.shape)
-                        st.write("PCA shape:", X_pca.shape)
-                        st.write("PCA vector :", X_pca[0][:100].tolist())
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+                                    color: white; padding: 2rem; border-radius: 12px; text-align: center; margin: 2rem 0;">
+                            <h2 style="margin: 0; color: white;">❌ LOAN REJECTED</h2>
+                            <p style="margin: 1rem 0 0 0; font-size: 1.2rem; color: white;">
+                                Probability Score: <strong>{proba:.4f}</strong>
+                            </p>
+                        </div>
+                        """ if proba is not None else """
+                        <div style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+                                    color: white; padding: 2rem; border-radius: 12px; text-align: center; margin: 2rem 0;">
+                            <h2 style="margin: 0; color: white;">❌ LOAN REJECTED</h2>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    with st.expander("🔍 Show technical details"):
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Scaled Shape", f"{X_scaled.shape[0]}×{X_scaled.shape[1]}")
+                        with col2:
+                            st.metric("PCA Shape", f"{X_pca.shape[0]}×{X_pca.shape[1]}")
+                        with col3:
+                            st.metric("Components", 100)
+
+                        st.write("**PCA Vector (first 100 components):**")
+                        st.code(X_pca[0][:100].tolist())
                 except Exception as e:
-                    st.exception("Error processing pasted row: " + str(e))
+                    st.exception("❌ Error processing pasted row: " + str(e))
 
 
 if __name__ == "__main__":

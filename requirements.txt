@@ -1,3 +1,4 @@
+imbalanced-learn
 streamlit
 pandas
 numpy
